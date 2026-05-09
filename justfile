@@ -18,9 +18,12 @@ validate:
 version:
     @jq -r '.version' .claude-plugin/plugin.json
 
-# @ が empty (未コミット変更なし) であることを検証
+# working copy が clean (未確定変更なし) であることを検証
+# CI 環境 (git clone) では jj が無いので jj diff も実行されず、結果として clean 扱いになる
+# (CI は clean な checkout が前提なので問題なし)
 ensure-clean:
-    test "$(jj log -r @ --no-graph -T 'empty')" = "true"
+    @[ -z "$(jj diff --summary 2>/dev/null)" ] \
+        || { echo "ERROR: working copy に未確定変更があります。describe してから push してください" >&2; exit 1; }
 
 # plugin.json と marketplace.json の version 一致チェック
 check-versions:
