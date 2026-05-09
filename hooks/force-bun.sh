@@ -1,47 +1,51 @@
 #!/bin/bash
-set -euo pipefail
+# PreToolUse(Bash) hook: npm / npx を直接実行させず、bun / bunx へ誘導する。
+#
+# Claude Code は Bash ツールの `command` 引数をそのまま `bash -c` に流す。
+# npm / npx の起動を検出したら exit 2 でブロックし、stderr に bun/bunx への
+# 置換案を返す。行頭またはコマンドセパレータ (`&&` / `;` / `||` / `|` / `(` /
+# `{`) 直後に現れたケースのみ対象とし、`git commit -m "... npm ..."` のように
+# 後続コマンドへ連結された npm も拾う (引用符以降を切り捨てる旧実装はやめた)。
+#
+# NOTE: `set -e` は使わない。フック自体の不具合 (jq 不在、JSON 不正等) は
+# 通過 (exit 0) させて、ユーザの作業を巻き込まないこと。
 
-suggest_deny() {
-    local reason="$1"
-    jq -cn \
-        --arg reason "$reason" \
-        '{
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": $reason
-            }
-        }'
-    exit 1
-}
+input=$(cat)
+command=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null) || exit 0
+[ -n "$command" ] || exit 0
 
-# 標準入力から JSON を読み取り
-input=$(</dev/stdin)
-# コマンドチェックの際に複数行がある場合は最初の行のみを使用
-command=$(jq -r '.tool_input.command // empty' <<< "$input")
+# コマンド位置アンカー: 行頭 / `&&` / `;` / `||` / `|` / `(` / `{` 直後。
+# heredoc やシングルクォート内の文字列リテラルは誤検知し得るが、検出漏れ回避を
+# 優先する (echo "npm install と書く" のような引用文字列内マッチは許容、README 参照)。
+anchor='(^|&&|[|;({])\s*'
 
-# 引用符以降は無視する（コミットメッセージとかのコメント文字列に含む場合などの誤検知回避のため）
-command=${command%%[\'\"]*}
-
-# コマンドが空の場合は何もチェックしない
-[[ -z "$command" ]] && exit 0
-
-# コマンド区切りパターン（行頭 or シェル区切り文字の後）
-CMD_PREFIX='(^|[|&;({][[:space:]]*)'
-
-# Bun に置き換えを推奨
-if [[ $command =~ ${CMD_PREFIX}(npx|npm\ x|npm\ exec)([[:space:]]|$) ]]; then
-    suggest_deny "Use 'bunx' instead of npx, npm x, or npm exec"
+# npm version / npm publish は許可 (bun に対応コマンドが無いため) → 先に通す
+if printf '%s' "$command" | grep -qE "${anchor}npm\s+(version|publish)\b"; then
+  exit 0
 fi
 
-# npm version と npm publish は許可（bun に代替機能がないため）
-if [[ $command =~ ${CMD_PREFIX}npm\ (version|publish) ]]; then
-    exit 0
+# npx / npm x / npm exec → bunx
+if printf '%s' "$command" | grep -qE "${anchor}(npx|npm\s+(x|exec))\b"; then
+  cat >&2 <<'EOF'
+BLOCK: `npx` / `npm x` / `npm exec` は直接実行できません。
+
+代わりに `bunx` を使ってください:
+
+  bunx <package> ...
+EOF
+  exit 2
 fi
 
-# その他の npm コマンドは Bun を推奨
-if [[ $command =~ ${CMD_PREFIX}npm([[:space:]]|$) ]]; then
-    suggest_deny "Use 'bun' instead of npm"
+# その他の npm → bun
+if printf '%s' "$command" | grep -qE "${anchor}npm\b"; then
+  cat >&2 <<'EOF'
+BLOCK: `npm` は直接実行できません。
+
+代わりに `bun` を使ってください (例: `npm install` → `bun install`、`npm run` → `bun run`)。
+
+例外として `npm version` / `npm publish` は許可されています (bun に対応コマンドが無いため)。
+EOF
+  exit 2
 fi
 
 exit 0

@@ -3,7 +3,7 @@
   "owner": { "name": "kawaz" },
   "metadata": {
     "description": "Suggests using Bun instead of npm/npx commands in Bash tool calls",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "license": "MIT"
   },
   "plugins": [

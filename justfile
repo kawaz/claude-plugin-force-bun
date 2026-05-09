@@ -4,11 +4,15 @@ default:
     @just --list
 
 # CI とローカルの検査範囲を完全一致させる単一エントリ
-ci: lint validate check-versions check-translations
+ci: lint test validate check-versions check-translations
 
-# shellcheck (hooks/ 配下の .sh を検査)
+# shellcheck (hooks/ + tests/ 配下の .sh を検査)
 lint:
-    shellcheck hooks/*.sh
+    shellcheck hooks/*.sh tests/*.sh
+
+# force-bun.sh の block/pass/fail-open 動作テスト
+test:
+    bash tests/force-bun.test.sh
 
 # プラグイン manifest の検証
 validate:
@@ -18,12 +22,16 @@ validate:
 version:
     @jq -r '.version' .claude-plugin/plugin.json
 
-# working copy が clean (未確定変更なし) であることを検証
-# CI 環境 (git clone) では jj が無いので jj diff も実行されず、結果として clean 扱いになる
-# (CI は clean な checkout が前提なので問題なし)
+# working copy が clean (未確定変更がない) ことを確認
+# jj 管理下 / git 管理下 (CI 含む) どちらでも意味を保つように分岐
 ensure-clean:
-    @[ -z "$(jj diff --summary 2>/dev/null)" ] \
-        || { echo "ERROR: working copy に未確定変更があります。describe してから push してください" >&2; exit 1; }
+    @if [ -d .jj ]; then \
+        test -z "$(jj diff --summary)" \
+        || { echo "ERROR: working copy に未確定変更があります。describe してから push してください" >&2; exit 1; }; \
+    else \
+        test -z "$(git status --porcelain)" \
+        || { echo "ERROR: working copy に未確定変更があります。commit してから push してください" >&2; exit 1; }; \
+    fi
 
 # plugin.json と marketplace.json の version 一致チェック
 check-versions:
