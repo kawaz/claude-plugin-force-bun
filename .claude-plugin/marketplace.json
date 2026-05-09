@@ -1,0 +1,16 @@
+{
+  "name": "force-bun",
+  "owner": { "name": "kawaz" },
+  "metadata": {
+    "description": "Suggests using Bun instead of npm/npx commands in Bash tool calls",
+    "version": "0.2.1",
+    "license": "MIT"
+  },
+  "plugins": [
+    {
+      "name": "force-bun",
+      "description": "PreToolUse(Bash) hook that intercepts npm/npx commands and suggests bun/bunx alternatives",
+      "source": "./"
+    }
+  ]
+}

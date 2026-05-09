@@ -1,0 +1,8 @@
+{
+  "name": "force-bun",
+  "description": "Suggests using Bun instead of npm/npx commands in Bash tool calls",
+  "version": "0.2.1",
+  "author": { "name": "kawaz" },
+  "license": "MIT",
+  "repository": "https://github.com/kawaz/claude-plugin-force-bun"
+}
